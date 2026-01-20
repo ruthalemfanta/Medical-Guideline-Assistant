@@ -1,0 +1,14 @@
+<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Medical cross background -->
+  <rect width="32" height="32" rx="6" fill="#2563eb"/>
+  
+  <!-- Medical cross -->
+  <rect x="13" y="8" width="6" height="16" fill="white" rx="1"/>
+  <rect x="8" y="13" width="16" height="6" fill="white" rx="1"/>
+  
+  <!-- Small medical symbols -->
+  <circle cx="10" cy="10" r="1.5" fill="#93c5fd" opacity="0.8"/>
+  <circle cx="22" cy="10" r="1.5" fill="#93c5fd" opacity="0.8"/>
+  <circle cx="10" cy="22" r="1.5" fill="#93c5fd" opacity="0.8"/>
+  <circle cx="22" cy="22" r="1.5" fill="#93c5fd" opacity="0.8"/>
+</svg>
