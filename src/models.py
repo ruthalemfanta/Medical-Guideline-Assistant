@@ -14,6 +14,7 @@ class MedicalIntent(str, Enum):
     PROCEDURE = "procedure"
     DIAGNOSIS = "diagnosis"
     TREATMENT = "treatment"
+    CONVERSATIONAL = "conversational"
     SCOPE_VIOLATION = "scope_violation"
 
 
@@ -76,6 +77,11 @@ class Citation(BaseModel):
     organization: str
     year: int
     quote: str
+    
+    @property
+    def source(self) -> str:
+        """Get source name for frontend compatibility."""
+        return self.guideline_name
 
 
 class SafetyCheck(BaseModel):

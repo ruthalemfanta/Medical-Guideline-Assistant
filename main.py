@@ -79,9 +79,9 @@ async def process_query(request: QueryRequest):
         return QueryResponse(
             query=response.query,
             answer=response.answer,
-            citations=[citation.dict() for citation in response.citations],
+            citations=[citation.model_dump() for citation in response.citations],
             confidence_score=response.confidence_score,
-            safety_check=response.safety_check.dict(),
+            safety_check=response.safety_check.model_dump(),
             disclaimer=response.disclaimer
         )
         

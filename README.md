@@ -1,6 +1,6 @@
-# Educational Medical Guideline Assistant
+# Medical Guideline Assistant
 
-A research-grade RAG system for answering questions strictly grounded in official medical guidelines (WHO, CDC, NICE, etc.) with zero improvisation.
+A complete full-stack RAG system with React frontend for answering questions strictly grounded in official medical guidelines (WHO, CDC, NICE, etc.) with zero improvisation.
 
 ## 🎯 Core Principles
 
@@ -9,56 +9,92 @@ A research-grade RAG system for answering questions strictly grounded in officia
 - **Educational Only**: Explicit disclaimers and educational focus
 - **Precise Citations**: Exact guideline sections with page numbers
 
+## 🚀 Quick Start
+
+### Automated Setup (Recommended)
+```bash
+python setup.py
+```
+
+### Manual Setup
+```bash
+# Backend
+python -m venv medical-assistant-env
+source medical-assistant-env/bin/activate  # On Windows: medical-assistant-env\Scripts\activate
+pip install -r requirements.txt
+cp .env.example .env
+# Edit .env with your OpenAI API key
+python main.py
+
+# Frontend (in another terminal)
+cd guideline-helper
+npm install
+npm run dev
+```
+
+### Start Both Servers
+```bash
+python start.py
+```
+
+### Access the Application
+- **Frontend**: http://localhost:5173
+- **Backend API**: http://localhost:8000
+- **API Docs**: http://localhost:8000/docs
+
 ## 🏗️ Architecture
 
-Modern multi-stage RAG pipeline:
+### Backend (Python/FastAPI)
 1. Intent & Risk Classification
-2. Query Decomposition
+2. Query Decomposition  
 3. Hybrid + Structured Retrieval
 4. Evidence Validation & Reranking
 5. Grounded Answer Synthesis
 6. Consistency & Safety Check
 
-## 🚀 Quick Start
-
-```bash
-# Install dependencies
-pip install -r requirements.txt
-
-# Set up environment
-cp .env.example .env
-# Edit .env with your OpenAI API key
-
-# Run the API server
-python main.py
-
-# Or use the CLI
-python cli.py --query "What is hypertension according to WHO?"
-```
+### Frontend (React/TypeScript)
+- Modern chat interface with real-time messaging
+- Drag & drop document upload
+- Citation display with confidence scoring
+- Backend connection monitoring
+- Responsive design with dark/light themes
 
 ## 📁 Project Structure
 
 ```
 medical-guideline-assistant/
-├── src/                    # Core system components
-│   ├── medical_assistant.py   # Main orchestrator
-│   ├── query_analyzer.py      # Intent classification & safety
-│   ├── retrieval_system.py    # Hybrid retrieval
-│   ├── answer_generator.py    # Grounded synthesis
-│   ├── safety_validator.py    # Safety validation
-│   ├── document_processor.py  # Document ingestion
-│   ├── models.py              # Data models
-│   └── config.py              # Configuration
-├── examples/               # Usage examples
-├── tests/                 # Test suite
-├── docs/                  # Documentation
-├── config/                # Sample configurations
-├── main.py               # API server
-├── cli.py                # Command-line interface
-└── requirements.txt      # Dependencies
+├── src/                           # Backend Python code
+│   ├── medical_assistant.py      # Main orchestrator
+│   ├── query_analyzer.py         # Intent classification & safety
+│   ├── retrieval_system.py       # Hybrid retrieval
+│   ├── answer_generator.py       # Grounded synthesis
+│   ├── safety_validator.py       # Safety validation
+│   ├── document_processor.py     # Document ingestion
+│   ├── models.py                 # Data models
+│   └── config.py                 # Configuration
+├── guideline-helper/             # React frontend
+│   ├── src/
+│   │   ├── components/           # UI components
+│   │   ├── hooks/               # Custom React hooks
+│   │   ├── services/            # API integration
+│   │   └── pages/               # Application pages
+│   └── package.json
+├── data/                         # Document storage
+├── main.py                       # FastAPI server
+├── cli.py                        # Command-line interface
+├── setup.py                      # Automated setup script
+├── start.py                      # Start both servers
+├── test_integration.py           # Integration tests
+└── requirements.txt              # Python dependencies
 ```
 
 ## 🔧 Features
+
+### Full-Stack Integration
+- **Real-time Chat**: Conversational interface with medical query handling
+- **Document Management**: Upload, track, and manage PDF guidelines
+- **Status Monitoring**: Real-time backend connection status
+- **Error Handling**: Comprehensive error handling and user feedback
 
 ### Safety-First Design
 - Multi-layer safety validation
@@ -72,37 +108,29 @@ medical-guideline-assistant/
 - Population-specific filtering
 - Section-based relevance
 
-### Grounded Generation
-- Evidence-only responses
-- Automatic citation extraction
-- Confidence scoring
-- Educational disclaimers
-
-### Document Processing
-- Semantic section extraction
-- Medical metadata preservation
-- Population-aware chunking
-- Guideline organization detection
+### Modern UI/UX
+- Responsive design for all devices
+- Drag & drop file uploads
+- Real-time typing indicators
+- Confidence score visualization
+- Clean citation display
 
 ## 📖 Usage Examples
+
+### Web Interface
+1. Start servers: `python start.py`
+2. Open http://localhost:5173
+3. Upload medical guideline PDFs via drag & drop
+4. Ask questions like:
+   - "Hi" → Friendly conversational response
+   - "What are WHO guidelines for hypertension?" → Medical answer with citations
+   - "Thanks" → Acknowledgment
 
 ### API Usage
 ```bash
 curl -X POST "http://localhost:8000/query" \
      -H "Content-Type: application/json" \
      -d '{"query": "What does WHO recommend for hypertension treatment?"}'
-```
-
-### Python SDK
-```python
-from src.medical_assistant import MedicalGuidelineAssistant
-
-assistant = MedicalGuidelineAssistant()
-response = assistant.process_query("What is diabetes?")
-
-print(f"Answer: {response.answer}")
-print(f"Confidence: {response.confidence_score}")
-print(f"Citations: {len(response.citations)}")
 ```
 
 ### CLI Interface
@@ -121,6 +149,7 @@ python cli.py --add-document guidelines/who_hypertension_2023.pdf
 
 ### Query Safety
 - ✅ Educational questions: "What is hypertension?"
+- ✅ Conversational: "Hi", "Thanks", "Great"
 - ❌ Medical advice: "Should I take this medication?"
 - ❌ Diagnosis: "Do I have diabetes?"
 - ❌ Emergency: "I'm having chest pain"
@@ -131,47 +160,56 @@ python cli.py --add-document guidelines/who_hypertension_2023.pdf
 - Educational disclaimers
 - Confidence assessment
 
-## 📊 System Components
-
-| Component | Purpose | Key Features |
-|-----------|---------|--------------|
-| Query Analyzer | Intent classification & safety | Risk detection, entity extraction |
-| Retrieval System | Document retrieval | Hybrid search, medical reranking |
-| Answer Generator | Response synthesis | Grounded generation, citations |
-| Safety Validator | Response validation | Multi-layer safety checks |
-| Document Processor | Guideline ingestion | Semantic parsing, metadata |
-
-## 🔬 Evaluation Metrics
-
-- **Document Consistency**: Answers traceable to sources
-- **Citation Correctness**: Accurate guideline references  
-- **Refusal Accuracy**: Proper unsafe query handling
-- **Hallucination Rate**: Zero unsupported claims
-- **Educational Compliance**: Appropriate disclaimers
-
-## 📚 Documentation
-
-- [Architecture Guide](docs/ARCHITECTURE.md) - System design and components
-- [Usage Guide](docs/USAGE.md) - Detailed usage instructions
-- [API Documentation](http://localhost:8000/docs) - Interactive API docs
-
 ## 🧪 Testing
 
+### Integration Tests
 ```bash
-# Run safety validator tests
-python tests/test_safety_validator.py
+python test_integration.py
+```
 
-# Run example usage
-python examples/example_usage.py
+### Manual Testing
+```bash
+# Start backend
+python main.py
+
+# In another terminal, start frontend
+cd guideline-helper && npm run dev
+
+# Test full workflow in browser
 ```
 
 ## 🔧 Configuration
 
-Key environment variables:
-- `OPENAI_API_KEY`: Required for LLM operations
-- `ENABLE_SAFETY_CHECKS`: Enable/disable safety validation
-- `REQUIRE_CITATIONS`: Require citations in responses
-- `EDUCATIONAL_DISCLAIMER`: Add educational disclaimers
+### Backend Environment (.env)
+```env
+OPENAI_API_KEY=your_openai_api_key_here
+ENABLE_SAFETY_CHECKS=true
+REQUIRE_CITATIONS=true
+LOG_LEVEL=INFO
+```
+
+### Frontend Configuration
+- API base URL in `guideline-helper/src/services/api.ts`
+- Theme settings in `guideline-helper/src/components/ui/`
+
+## 🚨 Troubleshooting
+
+### Common Issues
+1. **Backend not available**: Check if Python server is running on port 8000
+2. **Upload failures**: Ensure files are PDF format and < 50MB
+3. **No responses**: Verify OpenAI API key and uploaded documents
+4. **CORS errors**: Check backend CORS configuration
+
+### Debug Mode
+```bash
+# Backend debug logging
+export LOG_LEVEL=DEBUG
+python main.py
+
+# Frontend debug mode
+cd guideline-helper
+npm run dev -- --debug
+```
 
 ## ⚠️ Important Disclaimer
 
@@ -183,7 +221,8 @@ This system is for educational purposes only. It does not provide medical advice
 2. Create a feature branch
 3. Add tests for new functionality
 4. Ensure safety compliance
-5. Submit a pull request
+5. Test both frontend and backend
+6. Submit a pull request
 
 ## 📄 License
 

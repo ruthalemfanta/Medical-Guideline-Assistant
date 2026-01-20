@@ -66,8 +66,7 @@ class MedicalAnswerGenerator:
         
         if best_content and 'hiv' in query_analysis.original_query.lower():
             # Create a coherent HIV definition from the best content
-            answer = "According to WHO guidelines:\n\n"
-            answer += "HIV (Human Immunodeficiency Virus) is a retrovirus that attacks the body's immune system. "
+            answer = ""
             
             # Add key points from retrieved content
             key_points = []
@@ -82,20 +81,20 @@ class MedicalAnswerGenerator:
             
             # Add the most relevant points
             if key_points:
-                answer += " ".join(key_points[:3]) + "."
+                answer = "HIV (Human Immunodeficiency Virus) is a retrovirus that attacks the body's immune system. " + " ".join(key_points[:3]) + "."
             else:
-                answer += ("If left untreated, HIV can progress to AIDS (Acquired Immunodeficiency Syndrome). "
+                answer = ("HIV (Human Immunodeficiency Virus) is a retrovirus that attacks the body's immune system. "
+                          "If left untreated, HIV can progress to AIDS (Acquired Immunodeficiency Syndrome). "
                           "However, with proper antiretroviral treatment (ART), people with HIV can live long, "
                           "healthy lives and prevent transmission to others.")
         
         elif best_content:
-            # General answer for other topics
-            answer = "According to WHO guidelines:\n\n"
-            answer += " ".join(best_content[:2]) + "."
+            # General answer for other topics - just use the content without redundant prefix
+            answer = " ".join(best_content[:2]) + "."
         
         else:
             # Fallback
-            answer = ("Based on WHO guidelines, this document provides comprehensive information "
+            answer = ("This document provides comprehensive information "
                      "about the topic. For detailed information, please refer to the complete "
                      "guideline document.")
         

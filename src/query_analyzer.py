@@ -83,9 +83,22 @@ class MedicalQueryAnalyzer:
         """Classify the medical intent of the query."""
         
         # Simple rule-based classification to avoid OpenAI API calls
-        query_lower = query.lower()
+        query_lower = query.lower().strip()
         
-        if any(word in query_lower for word in ['what is', 'define', 'definition', 'meaning']):
+        # Handle conversational queries
+        conversational_greetings = ['hi', 'hello', 'hey', 'good morning', 'good afternoon', 'good evening']
+        conversational_thanks = ['thanks', 'thank you', 'thx', 'appreciate it']
+        conversational_responses = ['great', 'good', 'ok', 'okay', 'fine', 'nice', 'cool', 'awesome']
+        
+        # Check for conversational patterns first, but be more specific
+        if query_lower in conversational_greetings or any(greeting == query_lower for greeting in conversational_greetings):
+            return MedicalIntent.CONVERSATIONAL
+        elif query_lower in conversational_thanks or any(thanks == query_lower for thanks in conversational_thanks):
+            return MedicalIntent.CONVERSATIONAL
+        elif query_lower in conversational_responses and len(query_lower.split()) <= 2:
+            return MedicalIntent.CONVERSATIONAL
+        # Medical content queries
+        elif any(word in query_lower for word in ['what is', 'define', 'definition', 'meaning']):
             return MedicalIntent.DEFINITION
         elif any(word in query_lower for word in ['recommend', 'should', 'best', 'treatment']):
             return MedicalIntent.RECOMMENDATION
