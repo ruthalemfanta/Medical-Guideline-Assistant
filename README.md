@@ -2,14 +2,14 @@
 
 A complete full-stack RAG system with React frontend for answering questions strictly grounded in official medical guidelines (WHO, CDC, NICE, etc.) with zero improvisation.
 
-## 🎯 Core Principles
+## Core Principles
 
 - **Safety First**: No medical advice outside documents, no diagnosis/prescriptions
 - **Document Grounded**: Every answer must be traceable to source guidelines
 - **Educational Only**: Explicit disclaimers and educational focus
 - **Precise Citations**: Exact guideline sections with page numbers
 
-## 🚀 Quick Start
+## Quick Start
 
 ### Automated Setup (Recommended)
 ```bash
@@ -148,11 +148,11 @@ python cli.py --add-document guidelines/who_hypertension_2023.pdf
 ## 🛡️ Safety Features
 
 ### Query Safety
-- ✅ Educational questions: "What is hypertension?"
-- ✅ Conversational: "Hi", "Thanks", "Great"
-- ❌ Medical advice: "Should I take this medication?"
-- ❌ Diagnosis: "Do I have diabetes?"
-- ❌ Emergency: "I'm having chest pain"
+- Educational questions: "What is hypertension?"
+- Conversational: "Hi", "Thanks", "Great"
+- Medical advice: "Should I take this medication?"
+- Diagnosis: "Do I have diabetes?"
+- Emergency: "I'm having chest pain"
 
 ### Response Safety
 - Evidence grounding validation
@@ -160,7 +160,7 @@ python cli.py --add-document guidelines/who_hypertension_2023.pdf
 - Educational disclaimers
 - Confidence assessment
 
-## 🧪 Testing
+## Testing
 
 ### Integration Tests
 ```bash
@@ -192,7 +192,7 @@ LOG_LEVEL=INFO
 - API base URL in `guideline-helper/src/services/api.ts`
 - Theme settings in `guideline-helper/src/components/ui/`
 
-## 🚨 Troubleshooting
+## Troubleshooting
 
 ### Common Issues
 1. **Backend not available**: Check if Python server is running on port 8000
@@ -211,11 +211,11 @@ cd guideline-helper
 npm run dev -- --debug
 ```
 
-## ⚠️ Important Disclaimer
+## Important Disclaimer
 
 This system is for educational purposes only. It does not provide medical advice, diagnosis, or treatment recommendations. Always consult qualified healthcare professionals for medical decisions.
 
-## 🤝 Contributing
+## Contributing
 
 1. Fork the repository
 2. Create a feature branch
