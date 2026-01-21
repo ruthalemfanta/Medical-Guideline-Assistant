@@ -55,9 +55,12 @@ class MedicalAnswerGenerator:
             ]):
                 continue
             
+            # Use just the filename instead of complex metadata
+            source_name = metadata.guideline if metadata.guideline else "Medical Guideline"
+            
             evidence_part = f"""
             [Evidence {i}]
-            Source: {metadata.guideline} ({metadata.guideline_metadata.organization} {metadata.guideline_metadata.publication_year})
+            Source: {source_name}
             Content: {content}
             """
             
@@ -69,23 +72,23 @@ class MedicalAnswerGenerator:
         """Generate answer using Gemini with proper prompting."""
         
         prompt = f"""
-        You are a medical information assistant that provides educational information based on medical guidelines.
+        You are a medical information assistant. Provide CONCISE, educational answers based ONLY on the evidence provided.
         
         CRITICAL INSTRUCTIONS:
-        1. ONLY use information explicitly stated in the evidence below
-        2. If the evidence does not contain relevant information for the query, say "I don't have specific information about this topic in the available medical guidelines"
-        3. DO NOT make up or infer information not present in the evidence
-        4. If the evidence contains related but not directly relevant information, acknowledge the limitation first, then provide what relevant context you can
-        5. Always maintain an educational, not advisory tone
-        6. Include source attribution (e.g., "According to WHO guidelines...")
-        7. Be honest about the scope and limitations of the available information
+        1. Keep answers conscise.
+        2. ONLY use information explicitly stated in the evidence below
+        3. DO NOT add extra information not in the evidence
+        4. DO NOT make up years, organizations, or publication dates
+        5. If the evidence doesn't contain relevant information, say "I don't have specific information about this topic in the available medical guidelines"
+        6. For simple definition questions, give a brief definition only
+        7. Use simple, clear language
         
         QUERY: {query_analysis.original_query}
         
         EVIDENCE FROM MEDICAL GUIDELINES:
         {evidence_context}
         
-        RESPONSE:
+        Provide a CONCISE response (maximum 100 words for simple questions):
         """
         
         try:
@@ -159,15 +162,25 @@ class MedicalAnswerGenerator:
         if "don't have specific information" in answer_lower:
             factors.append(0.3)  # Lower confidence for no-knowledge responses
         else:
-            # Higher confidence for substantive answers
-            length_factor = min(len(answer) / 200.0, 1.0)
+            # For concise answers, prefer shorter responses for simple questions
+            answer_length = len(answer)
+            if answer_length < 200:
+                length_factor = 1.0  # Good concise answer
+            elif answer_length < 500:
+                length_factor = 0.8  # Acceptable length
+            else:
+                length_factor = 0.6  # Too verbose, lower confidence
             factors.append(length_factor)
         
-        # Source attribution factor
+        # Source attribution factor - but don't require made-up citations
         source_factor = 1.0 if any(phrase in answer_lower for phrase in [
-            'according to', 'who guidelines', 'guidelines state', 'evidence shows'
-        ]) else 0.7
+            'according to', 'guidelines', 'evidence shows'
+        ]) else 0.8  # Slightly lower but still good if no attribution
         factors.append(source_factor)
+        
+        # Penalize if answer contains suspicious citations (made-up years)
+        if any(suspicious in answer_lower for suspicious in ['2026', '2027', '2028']):
+            factors.append(0.3)  # Heavy penalty for made-up citations
         
         return round(sum(factors) / len(factors), 2)
     
