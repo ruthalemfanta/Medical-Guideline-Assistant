@@ -1,9 +1,6 @@
 """Answer generation with grounded synthesis for medical guidelines."""
 
 from typing import List, Optional
-from langchain_openai import OpenAI
-from langchain_core.prompts import PromptTemplate
-
 from .models import RetrievedDocument, Citation, QueryAnalysis, MedicalIntent
 from .config import settings
 
@@ -12,8 +9,8 @@ class MedicalAnswerGenerator:
     """Generates grounded answers from medical guideline evidence."""
     
     def __init__(self):
-        # Skip OpenAI for now to avoid API costs  
-        self.llm = None
+        # No LLM needed for current implementation
+        pass
     
     def generate_answer(
         self, 
@@ -23,282 +20,239 @@ class MedicalAnswerGenerator:
         """Generate grounded answer with citations."""
         
         if not retrieved_docs:
-            return self._generate_no_evidence_response(), [], 0.0
+            return self._no_evidence_response(), [], 0.0
         
-        # Simple template-based answer generation (no LLM needed)
-        answer = self._generate_simple_answer(query_analysis, retrieved_docs)
+        # Generate answer based on content
+        answer = self._create_answer(query_analysis, retrieved_docs)
         
         # Extract citations
-        citations = self._extract_citations(retrieved_docs, answer)
+        citations = self._create_citations(retrieved_docs, answer)
         
         # Calculate confidence score
         confidence = self._calculate_confidence(answer, retrieved_docs)
         
         return answer, citations, confidence
     
-    def _generate_simple_answer(
-        self, 
-        query_analysis: QueryAnalysis,
-        retrieved_docs: List[RetrievedDocument]
-    ) -> str:
-        """Generate simple answer from retrieved documents."""
+    def _create_answer(self, query_analysis: QueryAnalysis, retrieved_docs: List[RetrievedDocument]) -> str:
+        """Create answer from retrieved documents."""
         
-        # Get the best content from top documents
-        best_content = []
+        query_lower = query_analysis.original_query.lower()
+        
+        # Get clean content from top documents
+        clean_content = self._extract_clean_content(retrieved_docs)
+        
+        if not clean_content:
+            return self._no_evidence_response()
+        
+        # Determine answer type based on query
+        if self._is_hiv_query(query_lower):
+            return self._create_hiv_answer(query_lower, clean_content)
+        else:
+            return self._create_non_hiv_answer(query_lower, clean_content)
+    
+    def _extract_clean_content(self, retrieved_docs: List[RetrievedDocument]) -> List[str]:
+        """Extract clean, meaningful content from documents."""
+        
+        clean_content = []
         
         for doc in retrieved_docs[:3]:  # Top 3 most relevant
             content = doc.content.strip()
             
             # Skip metadata/headers
             if any(skip in content.lower() for skip in [
-                'prepared for educational purposes',
-                'title:', 'page 1', 'page 2', 'page 3'
+                'prepared for educational purposes only',
+                'page 1 of', 'page 2 of', 'page 3 of'
             ]):
                 continue
-                
-            # Clean up the content
-            clean_content = content.replace('**', '').replace('###', '').strip()
             
-            # Take meaningful sentences
-            sentences = [s.strip() for s in clean_content.split('.') if len(s.strip()) > 15]
-            if sentences:
-                best_content.extend(sentences[:3])  # Top 3 sentences per doc
+            # Clean and filter substantial content
+            clean_text = content.replace('**', '').replace('###', '').strip()
+            if len(clean_text) > 50:
+                clean_content.append(clean_text)
         
-        if best_content and 'hiv' in query_analysis.original_query.lower():
-            # Create a coherent HIV definition from the best content
-            answer = ""
-            
-            # Add key points from retrieved content
-            key_points = []
-            for sentence in best_content:
-                if any(keyword in sentence.lower() for keyword in [
-                    'hiv', 'aids', 'immune', 'treatment', 'transmission', 'virus'
-                ]):
-                    # Clean and add important points
-                    clean_sentence = sentence.strip()
-                    if len(clean_sentence) > 20 and clean_sentence not in key_points:
-                        key_points.append(clean_sentence)
-            
-            # Add the most relevant points
-            if key_points:
-                answer = "HIV (Human Immunodeficiency Virus) is a retrovirus that attacks the body's immune system. " + " ".join(key_points[:3]) + "."
+        return clean_content
+    
+    def _is_hiv_query(self, query_lower: str) -> bool:
+        """Check if query is HIV-related."""
+        return any(keyword in query_lower for keyword in ['hiv', 'aids', 'antiretroviral', 'art'])
+    
+    def _create_hiv_answer(self, query_lower: str, content_list: List[str]) -> str:
+        """Create answer for HIV-related queries."""
+        
+        # Treatment guidelines
+        if any(word in query_lower for word in ['treatment', 'guidelines', 'therapy']):
+            return self._format_hiv_treatment_answer(content_list)
+        
+        # General HIV information
+        elif any(word in query_lower for word in ['what is', 'about hiv', 'hiv?']):
+            return self._format_hiv_definition_answer(content_list)
+        
+        # Prevention
+        elif 'prevention' in query_lower:
+            return self._format_hiv_prevention_answer(content_list)
+        
+        # Default: return first relevant content
+        return self._format_basic_content(content_list)
+    
+    def _create_non_hiv_answer(self, query_lower: str, content_list: List[str]) -> str:
+        """Create answer for non-HIV queries."""
+        
+        combined_content = " ".join(content_list).lower()
+        
+        # Check if asking about general medical topics we don't cover
+        general_topics = ['diabetes', 'hypertension', 'heart disease', 'stroke', 'kidney', 'liver']
+        
+        # Special handling for cancer
+        if 'cancer' in query_lower:
+            # Check if we have HIV-related cancer content
+            if any(hiv_cancer in combined_content for hiv_cancer in ['kaposi', 'cervical']):
+                return self._format_hiv_cancer_answer(query_lower, content_list)
             else:
-                answer = ("HIV (Human Immunodeficiency Virus) is a retrovirus that attacks the body's immune system. "
-                          "If left untreated, HIV can progress to AIDS (Acquired Immunodeficiency Syndrome). "
-                          "However, with proper antiretroviral treatment (ART), people with HIV can live long, "
-                          "healthy lives and prevent transmission to others.")
+                return self._no_knowledge_response()
         
-        elif best_content:
-            # General answer for other topics - just use the content without redundant prefix
-            answer = " ".join(best_content[:2]) + "."
+        # Check other general medical topics
+        if any(topic in query_lower for topic in general_topics):
+            return self._no_knowledge_response()
         
+        # For other queries, return formatted content
+        return self._format_basic_content(content_list)
+    
+    def _format_hiv_treatment_answer(self, content_list: List[str]) -> str:
+        """Format HIV treatment guidelines answer."""
+        
+        answer = "According to WHO HIV treatment guidelines:\n\n"
+        
+        # Look for guideline lists
+        for content in content_list:
+            if 'list of relevant hiv guidelines' in content.lower():
+                lines = content.split('\n')
+                guidelines = []
+                
+                for line in lines:
+                    line = line.strip()
+                    if (line and ('guidelines for' in line.lower() or 
+                                line.startswith(('1.', '2.', '3.', '4.', '5.')))):
+                        clean_line = line.replace('1.', '•').replace('2.', '•').replace('3.', '•').replace('4.', '•').replace('5.', '•')
+                        guidelines.append(clean_line)
+                
+                if guidelines:
+                    answer += "**Key Guidelines:**\n"
+                    answer += "\n".join(guidelines[:5]) + "\n\n"
+                    break
+        
+        # Add objectives if found
+        for content in content_list:
+            if 'objectives' in content.lower() and 'guidelines' in content.lower():
+                answer += "**Objectives:**\n"
+                answer += "These guidelines provide evidence-informed clinical recommendations for HIV treatment and management.\n\n"
+                break
+        
+        return answer.strip()
+    
+    def _format_hiv_definition_answer(self, content_list: List[str]) -> str:
+        """Format HIV definition answer."""
+        
+        answer = "HIV (Human Immunodeficiency Virus) is a retrovirus that attacks the body's immune system.\n\n"
+        
+        # Extract key facts from content
+        facts = []
+        for content in content_list:
+            sentences = content.split('.')
+            for sentence in sentences:
+                sentence = sentence.strip()
+                if (len(sentence) > 30 and 
+                    any(keyword in sentence.lower() for keyword in ['hiv', 'virus', 'immune', 'transmission'])):
+                    facts.append(sentence)
+                    if len(facts) >= 3:
+                        break
+        
+        if facts:
+            answer += "**Key Facts:**\n"
+            for fact in facts[:3]:
+                answer += f"• {fact}\n"
         else:
-            # Fallback
-            answer = ("This document provides comprehensive information "
-                     "about the topic. For detailed information, please refer to the complete "
-                     "guideline document.")
+            answer += ("**Key Facts:**\n"
+                      "• If left untreated, HIV can progress to AIDS\n"
+                      "• With proper treatment, people with HIV can live normal lives\n"
+                      "• Effective treatment prevents transmission (U=U)")
         
         return answer
     
-    def _format_evidence(self, retrieved_docs: List[RetrievedDocument]) -> str:
-        """Format retrieved documents as evidence context."""
+    def _format_hiv_prevention_answer(self, content_list: List[str]) -> str:
+        """Format HIV prevention answer."""
         
-        evidence_parts = []
+        answer = "HIV Prevention Methods:\n\n"
         
-        for i, doc in enumerate(retrieved_docs, 1):
-            metadata = doc.metadata
-            
-            evidence_part = f"""
-            [Evidence {i}]
-            Source: {metadata.guideline} ({metadata.guideline_metadata.organization} {metadata.guideline_metadata.publication_year})
-            Section: {metadata.section}
-            Page: {metadata.page_number or 'N/A'}
-            Content: {doc.content}
-            """
-            
-            evidence_parts.append(evidence_part.strip())
+        # Look for prevention content
+        prevention_content = []
+        for content in content_list:
+            if any(keyword in content.lower() for keyword in ['prevention', 'prevent', 'transmission']):
+                prevention_content.append(content)
         
-        return "\n\n".join(evidence_parts)
+        if prevention_content:
+            # Extract key prevention points
+            sentences = prevention_content[0].split('.')
+            for sentence in sentences[:3]:
+                if len(sentence.strip()) > 20:
+                    answer += f"• {sentence.strip()}\n"
+        else:
+            answer += ("• Use condoms consistently and correctly\n"
+                      "• Get tested regularly\n"
+                      "• Consider PrEP if at high risk")
+        
+        return answer
     
-    def _generate_definition_answer(
-        self, 
-        query_analysis: QueryAnalysis, 
-        evidence_context: str
-    ) -> str:
-        """Generate definition-focused answer."""
+    def _format_hiv_cancer_answer(self, query_lower: str, content_list: List[str]) -> str:
+        """Format HIV-related cancer answer."""
         
-        prompt = PromptTemplate(
-            input_variables=["query", "evidence"],
-            template="""
-            Based on the medical guideline evidence below, provide a clear definition or explanation.
+        if 'what is cancer' in query_lower or 'what cancer is' in query_lower:
+            # Be honest about limitations first, then provide relevant context
+            answer = ("I don't have comprehensive information about cancer in general. "
+                     "However, according to the HIV guidelines in my database, "
+                     "certain cancers are of particular concern for people with HIV:\n\n")
             
-            CRITICAL RULES:
-            - Only use information explicitly stated in the evidence
-            - Quote or paraphrase the guidelines directly
-            - Include the source guideline name in your answer
-            - If evidence is insufficient, state this clearly
-            - Use educational, not advisory language
+            combined_content = " ".join(content_list).lower()
             
-            Query: {query}
+            if 'kaposi' in combined_content:
+                answer += "**Kaposi's Sarcoma**: A cancer that commonly affects people with HIV, particularly those with advanced HIV disease.\n\n"
             
-            Evidence:
-            {evidence}
+            if 'cervical' in combined_content:
+                answer += "**Cervical Cancer**: Women living with HIV have increased risk of cervical cancer.\n\n"
             
-            Answer:
-            """
-        )
+            answer += ("For comprehensive information about cancer in general, "
+                      "please consult general medical resources or speak with a healthcare provider.")
+            
+            return answer
         
-        return self.llm(prompt.format(
-            query=query_analysis.original_query,
-            evidence=evidence_context
-        )).strip()
+        # For treatment questions, also acknowledge limitations
+        elif 'treatment' in query_lower:
+            return ("I don't have general cancer treatment information. However, according to WHO HIV guidelines:\n\n" + 
+                   self._format_basic_content(content_list))
+        
+        return self._format_basic_content(content_list)
     
-    def _generate_recommendation_answer(
-        self, 
-        query_analysis: QueryAnalysis, 
-        evidence_context: str
-    ) -> str:
-        """Generate recommendation-focused answer."""
+    def _format_basic_content(self, content_list: List[str]) -> str:
+        """Format basic content response."""
         
-        prompt = PromptTemplate(
-            input_variables=["query", "evidence"],
-            template="""
-            Based on the medical guideline evidence below, explain what the guidelines recommend.
-            
-            CRITICAL RULES:
-            - Present guidelines' recommendations, not personal advice
-            - Use phrases like "The guidelines state..." or "According to [Guideline]..."
-            - Include any conditions or limitations mentioned
-            - Quote specific recommendations when possible
-            - If recommendations are conditional, explain the conditions
-            
-            Query: {query}
-            
-            Evidence:
-            {evidence}
-            
-            Answer:
-            """
-        )
+        if not content_list:
+            return self._no_evidence_response()
         
-        return self.llm(prompt.format(
-            query=query_analysis.original_query,
-            evidence=evidence_context
-        )).strip()
+        main_content = content_list[0]
+        
+        # Truncate if too long
+        if len(main_content) > 400:
+            sentences = main_content.split('.')
+            return '. '.join(sentences[:3]) + '.'
+        
+        return main_content
     
-    def _generate_contraindication_answer(
-        self, 
-        query_analysis: QueryAnalysis, 
-        evidence_context: str
-    ) -> str:
-        """Generate contraindication-focused answer."""
-        
-        prompt = PromptTemplate(
-            input_variables=["query", "evidence"],
-            template="""
-            Based on the medical guideline evidence below, explain contraindications, warnings, or safety information.
-            
-            CRITICAL RULES:
-            - Focus on safety information from guidelines
-            - Use cautious language: "The guidelines indicate..." 
-            - Include all relevant warnings or contraindications
-            - Mention specific populations if relevant
-            - If no contraindications are mentioned, state this clearly
-            
-            Query: {query}
-            
-            Evidence:
-            {evidence}
-            
-            Answer:
-            """
-        )
-        
-        return self.llm(prompt.format(
-            query=query_analysis.original_query,
-            evidence=evidence_context
-        )).strip()
-    
-    def _generate_procedure_answer(
-        self, 
-        query_analysis: QueryAnalysis, 
-        evidence_context: str
-    ) -> str:
-        """Generate procedure-focused answer."""
-        
-        prompt = PromptTemplate(
-            input_variables=["query", "evidence"],
-            template="""
-            Based on the medical guideline evidence below, explain the procedure or process described in the guidelines.
-            
-            CRITICAL RULES:
-            - Describe what the guidelines say about the procedure
-            - Include steps, indications, or criteria if mentioned
-            - Use educational language, not instructional
-            - Mention any variations for different populations
-            - If procedure details are limited, acknowledge this
-            
-            Query: {query}
-            
-            Evidence:
-            {evidence}
-            
-            Answer:
-            """
-        )
-        
-        return self.llm(prompt.format(
-            query=query_analysis.original_query,
-            evidence=evidence_context
-        )).strip()
-    
-    def _generate_general_answer(
-        self, 
-        query_analysis: QueryAnalysis, 
-        evidence_context: str
-    ) -> str:
-        """Generate general answer for other intents."""
-        
-        prompt = PromptTemplate(
-            input_variables=["query", "evidence"],
-            template="""
-            Based on the medical guideline evidence below, provide an educational response.
-            
-            CRITICAL RULES:
-            - Only use information from the provided evidence
-            - Maintain educational, not advisory tone
-            - Quote or reference specific guidelines
-            - If evidence doesn't fully answer the question, say so
-            - Structure the answer clearly and logically
-            
-            Query: {query}
-            
-            Evidence:
-            {evidence}
-            
-            Answer:
-            """
-        )
-        
-        return self.llm(prompt.format(
-            query=query_analysis.original_query,
-            evidence=evidence_context
-        )).strip()
-    
-    def _extract_citations(
-        self, 
-        retrieved_docs: List[RetrievedDocument], 
-        answer: str
-    ) -> List[Citation]:
-        """Extract citations from retrieved documents used in answer."""
+    def _create_citations(self, retrieved_docs: List[RetrievedDocument], answer: str) -> List[Citation]:
+        """Create citations from retrieved documents."""
         
         citations = []
         
-        # Only show top 3 most relevant citations
-        for doc in retrieved_docs[:3]:
+        for doc in retrieved_docs[:3]:  # Top 3 citations
             metadata = doc.metadata
-            
-            # Find relevant quote from the document
             quote = self._find_relevant_quote(doc.content, answer)
             
             citation = Citation(
@@ -315,74 +269,71 @@ class MedicalAnswerGenerator:
         return citations
     
     def _find_relevant_quote(self, doc_content: str, answer: str) -> str:
-        """Find the most relevant quote from document content."""
+        """Find relevant quote from document."""
         
-        # Simple approach: find sentences that appear in both
-        doc_sentences = doc_content.split('. ')
-        answer_lower = answer.lower()
+        sentences = doc_content.split('.')
+        answer_words = set(answer.lower().split())
         
-        for sentence in doc_sentences:
-            if len(sentence) > 50:  # Meaningful sentence
-                # Check if key words from sentence appear in answer
+        # Find sentence with most word overlap
+        best_sentence = ""
+        best_overlap = 0
+        
+        for sentence in sentences:
+            if len(sentence.strip()) > 30:
                 sentence_words = set(sentence.lower().split())
-                answer_words = set(answer_lower.split())
-                
                 overlap = len(sentence_words.intersection(answer_words))
-                if overlap >= 3:  # Reasonable overlap
-                    return sentence[:200] + "..." if len(sentence) > 200 else sentence
+                
+                if overlap > best_overlap:
+                    best_overlap = overlap
+                    best_sentence = sentence.strip()
         
-        # Fallback: return first meaningful sentence
-        for sentence in doc_sentences:
-            if len(sentence) > 50:
-                return sentence[:200] + "..." if len(sentence) > 200 else sentence
+        if best_sentence:
+            return best_sentence[:200] + "..." if len(best_sentence) > 200 else best_sentence
         
+        # Fallback
         return doc_content[:200] + "..."
     
-    def _calculate_confidence(
-        self, 
-        answer: str, 
-        retrieved_docs: List[RetrievedDocument]
-    ) -> float:
-        """Calculate confidence score for the answer."""
+    def _calculate_confidence(self, answer: str, retrieved_docs: List[RetrievedDocument]) -> float:
+        """Calculate confidence score."""
         
         if not retrieved_docs:
             return 0.0
         
-        # Factors affecting confidence
+        # Factors for confidence
         factors = []
         
-        # Number of supporting documents
-        doc_factor = min(len(retrieved_docs) / 3.0, 1.0)  # Max at 3 docs
+        # Document count factor
+        doc_factor = min(len(retrieved_docs) / 3.0, 1.0)
         factors.append(doc_factor)
         
-        # Average relevance score
+        # Relevance score factor (normalized)
         avg_relevance = sum(doc.relevance_score for doc in retrieved_docs) / len(retrieved_docs)
-        factors.append(avg_relevance)
+        normalized_relevance = max(0.0, min(1.0, (avg_relevance + 5.0) / 10.0))
+        factors.append(normalized_relevance)
         
-        # Answer length (reasonable answers are more confident)
-        length_factor = min(len(answer) / 300.0, 1.0)  # Max at 300 chars
+        # Answer length factor
+        length_factor = min(len(answer) / 300.0, 1.0)
         factors.append(length_factor)
         
-        # Presence of specific citations
-        citation_factor = 1.0 if any(
-            word in answer.lower() 
-            for word in ['according to', 'guidelines state', 'recommends']
-        ) else 0.7
+        # Citation presence factor
+        citation_factor = 1.0 if any(word in answer.lower() for word in ['according to', 'who guidelines']) else 0.7
         factors.append(citation_factor)
         
-        # Calculate weighted average
-        confidence = sum(factors) / len(factors)
-        
-        return round(confidence, 2)
+        return round(sum(factors) / len(factors), 2)
     
-    def _generate_no_evidence_response(self) -> str:
-        """Generate response when no evidence is available."""
+    def _no_evidence_response(self) -> str:
+        """Response when no evidence is available."""
         return (
             "I could not find specific information about this topic in the "
-            "available medical guidelines. This may be because:\n\n"
-            "• The topic is not covered in the current guideline database\n"
-            "• The question may need to be more specific\n"
-            "• The information may be in a section not yet indexed\n\n"
-            "Please try rephrasing your question or consult the original "
-            "guideline documents directly."
+            "available medical guidelines. This may be because the topic is "
+            "not covered in the current guideline database or the question "
+            "may need to be more specific."
+        )
+    
+    def _no_knowledge_response(self) -> str:
+        """Response when topic is outside our knowledge base."""
+        return (
+            "I don't have specific information about this topic in the available "
+            "medical guidelines. The current database primarily contains "
+            "HIV-related guidelines from WHO."
         )
