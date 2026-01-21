@@ -2,12 +2,14 @@
 
 import os
 from typing import List, Optional
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import Field
 
 
 class Settings(BaseSettings):
     """Application settings with validation."""
+
+    model_config = SettingsConfigDict(env_file=".env", case_sensitive=False, extra="ignore")
     
     # API Configuration
     openai_api_key: str = Field(..., env="OPENAI_API_KEY")
@@ -15,6 +17,10 @@ class Settings(BaseSettings):
     
     # Database Configuration
     chroma_persist_directory: str = Field("./data/chroma_db", env="CHROMA_PERSIST_DIRECTORY")
+    pinecone_api_key: Optional[str] = Field(None, env="PINECONE_API_KEY")
+    pinecone_index: str = Field("medical-guidelines", env="PINECONE_INDEX")
+    pinecone_host: Optional[str] = Field(None, env="PINECONE_HOST")
+    pinecone_namespace: str = Field("default", env="PINECONE_NAMESPACE")
     
     # Retrieval Configuration
     max_retrieval_docs: int = Field(10, env="MAX_RETRIEVAL_DOCS")
@@ -40,10 +46,6 @@ class Settings(BaseSettings):
         "definition", "recommendation", "contraindication", 
         "procedure", "diagnosis", "treatment", "scope_violation"
     ]
-    
-    class Config:
-        env_file = ".env"
-        case_sensitive = False
 
 
 # Global settings instance

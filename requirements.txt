@@ -13,3 +13,4 @@ pandas
 numpy<2
 rank-bm25
 google-genai
+pinecone
