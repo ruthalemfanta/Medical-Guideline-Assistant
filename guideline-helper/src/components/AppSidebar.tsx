@@ -1,4 +1,4 @@
-import { Upload, FileText, X, BookOpen, Loader2, CheckCircle, AlertCircle } from "lucide-react";
+import { Upload, FileText, X, BookOpen, Loader2, CheckCircle, AlertCircle, PanelLeftClose, PanelLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -38,7 +38,7 @@ const AppSidebar = ({
   totalDocuments 
 }: AppSidebarProps) => {
   const [isDragging, setIsDragging] = useState(false);
-  const { state } = useSidebar();
+  const { state, toggleSidebar } = useSidebar();
   const isCollapsed = state === "collapsed";
 
   const handleDrop = (e: React.DragEvent) => {
@@ -88,18 +88,21 @@ const AppSidebar = ({
     <Sidebar collapsible="icon">
       <SidebarHeader className="p-4 border-b border-sidebar-border">
         <div className="flex items-center gap-2">
-          <BookOpen className="h-5 w-5 text-primary shrink-0" />
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={toggleSidebar}
+            className="shrink-0 h-8 w-8"
+          >
+            {isCollapsed ? (
+              <PanelLeft className="h-4 w-4" />
+            ) : (
+              <PanelLeftClose className="h-4 w-4" />
+            )}
+          </Button>
           {!isCollapsed && (
             <div className="flex-1">
               <h2 className="text-sm font-semibold">Documents</h2>
-              <div className="flex items-center gap-2">
-                <p className="text-xs text-muted-foreground">Upload guidelines</p>
-                {totalDocuments !== undefined && (
-                  <Badge variant="outline" className="text-xs">
-                    {totalDocuments} total
-                  </Badge>
-                )}
-              </div>
             </div>
           )}
         </div>

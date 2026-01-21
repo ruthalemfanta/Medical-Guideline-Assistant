@@ -1,9 +1,7 @@
 """Answer generation with grounded synthesis for medical guidelines."""
 
 from typing import List, Optional
-from langchain_openai import OpenAI
-from langchain_core.prompts import PromptTemplate
-
+import google.genai as genai
 from .models import RetrievedDocument, Citation, QueryAnalysis, MedicalIntent
 from .config import settings
 
@@ -12,8 +10,8 @@ class MedicalAnswerGenerator:
     """Generates grounded answers from medical guideline evidence."""
     
     def __init__(self):
-        # Skip OpenAI for now to avoid API costs  
-        self.llm = None
+        # Initialize Gemini Flash 2.0 for proper answer generation
+        self.client = genai.Client(api_key=settings.google_api_key)
     
     def generate_answer(
         self, 
@@ -25,355 +23,166 @@ class MedicalAnswerGenerator:
         if not retrieved_docs:
             return self._generate_no_evidence_response(), [], 0.0
         
-        # Simple template-based answer generation (no LLM needed)
-        answer = self._generate_simple_answer(query_analysis, retrieved_docs)
+        # Format evidence context
+        evidence_context = self._format_evidence_context(retrieved_docs)
         
-        # Extract citations
-        citations = self._extract_citations(retrieved_docs, answer)
+        # Generate answer using Gemini
+        answer = self._generate_llm_answer(query_analysis, evidence_context)
+        
+        # Create simple source attribution (no detailed citations)
+        citations = []  # Disabled as requested
         
         # Calculate confidence score
         confidence = self._calculate_confidence(answer, retrieved_docs)
         
         return answer, citations, confidence
     
-    def _generate_simple_answer(
-        self, 
-        query_analysis: QueryAnalysis,
-        retrieved_docs: List[RetrievedDocument]
-    ) -> str:
-        """Generate simple answer from retrieved documents."""
-        
-        # Get the best content from top documents
-        best_content = []
-        
-        for doc in retrieved_docs[:3]:  # Top 3 most relevant
-            content = doc.content.strip()
-            
-            # Skip metadata/headers
-            if any(skip in content.lower() for skip in [
-                'prepared for educational purposes',
-                'title:', 'page 1', 'page 2', 'page 3'
-            ]):
-                continue
-                
-            # Clean up the content
-            clean_content = content.replace('**', '').replace('###', '').strip()
-            
-            # Take meaningful sentences
-            sentences = [s.strip() for s in clean_content.split('.') if len(s.strip()) > 15]
-            if sentences:
-                best_content.extend(sentences[:3])  # Top 3 sentences per doc
-        
-        if best_content and 'hiv' in query_analysis.original_query.lower():
-            # Create a coherent HIV definition from the best content
-            answer = ""
-            
-            # Add key points from retrieved content
-            key_points = []
-            for sentence in best_content:
-                if any(keyword in sentence.lower() for keyword in [
-                    'hiv', 'aids', 'immune', 'treatment', 'transmission', 'virus'
-                ]):
-                    # Clean and add important points
-                    clean_sentence = sentence.strip()
-                    if len(clean_sentence) > 20 and clean_sentence not in key_points:
-                        key_points.append(clean_sentence)
-            
-            # Add the most relevant points
-            if key_points:
-                answer = "HIV (Human Immunodeficiency Virus) is a retrovirus that attacks the body's immune system. " + " ".join(key_points[:3]) + "."
-            else:
-                answer = ("HIV (Human Immunodeficiency Virus) is a retrovirus that attacks the body's immune system. "
-                          "If left untreated, HIV can progress to AIDS (Acquired Immunodeficiency Syndrome). "
-                          "However, with proper antiretroviral treatment (ART), people with HIV can live long, "
-                          "healthy lives and prevent transmission to others.")
-        
-        elif best_content:
-            # General answer for other topics - just use the content without redundant prefix
-            answer = " ".join(best_content[:2]) + "."
-        
-        else:
-            # Fallback
-            answer = ("This document provides comprehensive information "
-                     "about the topic. For detailed information, please refer to the complete "
-                     "guideline document.")
-        
-        return answer
-    
-    def _format_evidence(self, retrieved_docs: List[RetrievedDocument]) -> str:
+    def _format_evidence_context(self, retrieved_docs: List[RetrievedDocument]) -> str:
         """Format retrieved documents as evidence context."""
         
         evidence_parts = []
         
-        for i, doc in enumerate(retrieved_docs, 1):
+        for i, doc in enumerate(retrieved_docs[:5], 1):  # Top 5 documents
             metadata = doc.metadata
+            
+            # Clean content
+            content = doc.content.strip()
+            
+            # Skip obvious metadata/headers
+            if any(skip in content.lower() for skip in [
+                'prepared for educational purposes only',
+                'page 1 of', 'page 2 of', 'page 3 of'
+            ]):
+                continue
+            
+            # Use just the filename instead of complex metadata
+            source_name = metadata.guideline if metadata.guideline else "Medical Guideline"
             
             evidence_part = f"""
             [Evidence {i}]
-            Source: {metadata.guideline} ({metadata.guideline_metadata.organization} {metadata.guideline_metadata.publication_year})
-            Section: {metadata.section}
-            Page: {metadata.page_number or 'N/A'}
-            Content: {doc.content}
+            Source: {source_name}
+            Content: {content}
             """
             
             evidence_parts.append(evidence_part.strip())
         
         return "\n\n".join(evidence_parts)
     
-    def _generate_definition_answer(
-        self, 
-        query_analysis: QueryAnalysis, 
-        evidence_context: str
-    ) -> str:
-        """Generate definition-focused answer."""
+    def _generate_llm_answer(self, query_analysis: QueryAnalysis, evidence_context: str) -> str:
+        """Generate answer using Gemini with proper prompting."""
         
-        prompt = PromptTemplate(
-            input_variables=["query", "evidence"],
-            template="""
-            Based on the medical guideline evidence below, provide a clear definition or explanation.
-            
-            CRITICAL RULES:
-            - Only use information explicitly stated in the evidence
-            - Quote or paraphrase the guidelines directly
-            - Include the source guideline name in your answer
-            - If evidence is insufficient, state this clearly
-            - Use educational, not advisory language
-            
-            Query: {query}
-            
-            Evidence:
-            {evidence}
-            
-            Answer:
-            """
-        )
+        prompt = f"""
+        You are a medical information assistant. Provide CONCISE, educational answers based ONLY on the evidence provided.
         
-        return self.llm(prompt.format(
-            query=query_analysis.original_query,
-            evidence=evidence_context
-        )).strip()
-    
-    def _generate_recommendation_answer(
-        self, 
-        query_analysis: QueryAnalysis, 
-        evidence_context: str
-    ) -> str:
-        """Generate recommendation-focused answer."""
+        CRITICAL INSTRUCTIONS:
+        1. Keep answers conscise.
+        2. ONLY use information explicitly stated in the evidence below
+        3. DO NOT add extra information not in the evidence
+        4. DO NOT make up years, organizations, or publication dates
+        5. If the evidence doesn't contain relevant information, say "I don't have specific information about this topic in the available medical guidelines"
+        6. For simple definition questions, give a brief definition only
+        7. Use simple, clear language
         
-        prompt = PromptTemplate(
-            input_variables=["query", "evidence"],
-            template="""
-            Based on the medical guideline evidence below, explain what the guidelines recommend.
-            
-            CRITICAL RULES:
-            - Present guidelines' recommendations, not personal advice
-            - Use phrases like "The guidelines state..." or "According to [Guideline]..."
-            - Include any conditions or limitations mentioned
-            - Quote specific recommendations when possible
-            - If recommendations are conditional, explain the conditions
-            
-            Query: {query}
-            
-            Evidence:
-            {evidence}
-            
-            Answer:
-            """
-        )
+        QUERY: {query_analysis.original_query}
         
-        return self.llm(prompt.format(
-            query=query_analysis.original_query,
-            evidence=evidence_context
-        )).strip()
-    
-    def _generate_contraindication_answer(
-        self, 
-        query_analysis: QueryAnalysis, 
-        evidence_context: str
-    ) -> str:
-        """Generate contraindication-focused answer."""
+        EVIDENCE FROM MEDICAL GUIDELINES:
+        {evidence_context}
         
-        prompt = PromptTemplate(
-            input_variables=["query", "evidence"],
-            template="""
-            Based on the medical guideline evidence below, explain contraindications, warnings, or safety information.
-            
-            CRITICAL RULES:
-            - Focus on safety information from guidelines
-            - Use cautious language: "The guidelines indicate..." 
-            - Include all relevant warnings or contraindications
-            - Mention specific populations if relevant
-            - If no contraindications are mentioned, state this clearly
-            
-            Query: {query}
-            
-            Evidence:
-            {evidence}
-            
-            Answer:
-            """
-        )
+        Provide a CONCISE response (maximum 100 words for simple questions):
+        """
         
-        return self.llm(prompt.format(
-            query=query_analysis.original_query,
-            evidence=evidence_context
-        )).strip()
-    
-    def _generate_procedure_answer(
-        self, 
-        query_analysis: QueryAnalysis, 
-        evidence_context: str
-    ) -> str:
-        """Generate procedure-focused answer."""
-        
-        prompt = PromptTemplate(
-            input_variables=["query", "evidence"],
-            template="""
-            Based on the medical guideline evidence below, explain the procedure or process described in the guidelines.
-            
-            CRITICAL RULES:
-            - Describe what the guidelines say about the procedure
-            - Include steps, indications, or criteria if mentioned
-            - Use educational language, not instructional
-            - Mention any variations for different populations
-            - If procedure details are limited, acknowledge this
-            
-            Query: {query}
-            
-            Evidence:
-            {evidence}
-            
-            Answer:
-            """
-        )
-        
-        return self.llm(prompt.format(
-            query=query_analysis.original_query,
-            evidence=evidence_context
-        )).strip()
-    
-    def _generate_general_answer(
-        self, 
-        query_analysis: QueryAnalysis, 
-        evidence_context: str
-    ) -> str:
-        """Generate general answer for other intents."""
-        
-        prompt = PromptTemplate(
-            input_variables=["query", "evidence"],
-            template="""
-            Based on the medical guideline evidence below, provide an educational response.
-            
-            CRITICAL RULES:
-            - Only use information from the provided evidence
-            - Maintain educational, not advisory tone
-            - Quote or reference specific guidelines
-            - If evidence doesn't fully answer the question, say so
-            - Structure the answer clearly and logically
-            
-            Query: {query}
-            
-            Evidence:
-            {evidence}
-            
-            Answer:
-            """
-        )
-        
-        return self.llm(prompt.format(
-            query=query_analysis.original_query,
-            evidence=evidence_context
-        )).strip()
-    
-    def _extract_citations(
-        self, 
-        retrieved_docs: List[RetrievedDocument], 
-        answer: str
-    ) -> List[Citation]:
-        """Extract citations from retrieved documents used in answer."""
-        
-        citations = []
-        
-        # Only show top 3 most relevant citations
-        for doc in retrieved_docs[:3]:
-            metadata = doc.metadata
-            
-            # Find relevant quote from the document
-            quote = self._find_relevant_quote(doc.content, answer)
-            
-            citation = Citation(
-                guideline_name=metadata.guideline,
-                section=metadata.section,
-                page_number=metadata.page_number,
-                organization=metadata.guideline_metadata.organization,
-                year=metadata.guideline_metadata.publication_year,
-                quote=quote
+        try:
+            response = self.client.models.generate_content(
+                model='gemini-2.5-flash',
+                contents=prompt
             )
+            raw_answer = response.text.strip()
             
-            citations.append(citation)
-        
-        return citations
+            # Format the answer to clean up markdown symbols
+            formatted_answer = self._format_markdown_to_text(raw_answer)
+            
+            return formatted_answer
+            
+        except Exception as e:
+            return f"I encountered an error while processing your query: {str(e)}"
     
-    def _find_relevant_quote(self, doc_content: str, answer: str) -> str:
-        """Find the most relevant quote from document content."""
+    def _format_markdown_to_text(self, text: str) -> str:
+        """Convert markdown formatting to clean text formatting."""
         
-        # Simple approach: find sentences that appear in both
-        doc_sentences = doc_content.split('. ')
-        answer_lower = answer.lower()
+        # Convert bold text (**text** or __text__)
+        import re
         
-        for sentence in doc_sentences:
-            if len(sentence) > 50:  # Meaningful sentence
-                # Check if key words from sentence appear in answer
-                sentence_words = set(sentence.lower().split())
-                answer_words = set(answer_lower.split())
-                
-                overlap = len(sentence_words.intersection(answer_words))
-                if overlap >= 3:  # Reasonable overlap
-                    return sentence[:200] + "..." if len(sentence) > 200 else sentence
+        # Replace **bold** with BOLD TEXT (uppercase)
+        text = re.sub(r'\*\*(.*?)\*\*', r'\1', text)  # Remove ** but keep content
+        text = re.sub(r'__(.*?)__', r'\1', text)      # Remove __ but keep content
         
-        # Fallback: return first meaningful sentence
-        for sentence in doc_sentences:
-            if len(sentence) > 50:
-                return sentence[:200] + "..." if len(sentence) > 200 else sentence
+        # Replace *italic* with regular text (just remove asterisks)
+        text = re.sub(r'\*(.*?)\*', r'\1', text)
         
-        return doc_content[:200] + "..."
+        # Clean up bullet points - convert * to •
+        text = re.sub(r'^\s*\*\s+', '• ', text, flags=re.MULTILINE)
+        
+        # Clean up numbered lists - ensure proper formatting
+        text = re.sub(r'^\s*(\d+)\.\s+', r'\1. ', text, flags=re.MULTILINE)
+        
+        # Clean up headers (### or ##)
+        text = re.sub(r'^#{1,6}\s+', '', text, flags=re.MULTILINE)
+        
+        # Clean up any remaining markdown artifacts
+        text = re.sub(r'`([^`]+)`', r'\1', text)  # Remove code backticks
+        text = re.sub(r'\[([^\]]+)\]\([^\)]+\)', r'\1', text)  # Remove links, keep text
+        
+        # Clean up extra whitespace
+        text = re.sub(r'\n\s*\n\s*\n', '\n\n', text)  # Max 2 consecutive newlines
+        text = re.sub(r'[ \t]+', ' ', text)  # Multiple spaces to single space
+        
+        return text.strip()
     
-    def _calculate_confidence(
-        self, 
-        answer: str, 
-        retrieved_docs: List[RetrievedDocument]
-    ) -> float:
-        """Calculate confidence score for the answer."""
+    def _calculate_confidence(self, answer: str, retrieved_docs: List[RetrievedDocument]) -> float:
+        """Calculate confidence score based on answer quality and evidence."""
         
         if not retrieved_docs:
             return 0.0
         
-        # Factors affecting confidence
         factors = []
         
-        # Number of supporting documents
-        doc_factor = min(len(retrieved_docs) / 3.0, 1.0)  # Max at 3 docs
+        # Document count factor
+        doc_factor = min(len(retrieved_docs) / 3.0, 1.0)
         factors.append(doc_factor)
         
-        # Average relevance score
+        # Relevance score factor (normalized)
         avg_relevance = sum(doc.relevance_score for doc in retrieved_docs) / len(retrieved_docs)
-        factors.append(avg_relevance)
+        normalized_relevance = max(0.0, min(1.0, (avg_relevance + 5.0) / 10.0))
+        factors.append(normalized_relevance)
         
-        # Answer length (reasonable answers are more confident)
-        length_factor = min(len(answer) / 300.0, 1.0)  # Max at 300 chars
-        factors.append(length_factor)
+        # Answer quality factors
+        answer_lower = answer.lower()
         
-        # Presence of specific citations
-        citation_factor = 1.0 if any(
-            word in answer.lower() 
-            for word in ['according to', 'guidelines state', 'recommends']
-        ) else 0.7
-        factors.append(citation_factor)
+        # Penalize "I don't know" responses (but don't eliminate them)
+        if "don't have specific information" in answer_lower:
+            factors.append(0.3)  # Lower confidence for no-knowledge responses
+        else:
+            # For concise answers, prefer shorter responses for simple questions
+            answer_length = len(answer)
+            if answer_length < 200:
+                length_factor = 1.0  # Good concise answer
+            elif answer_length < 500:
+                length_factor = 0.8  # Acceptable length
+            else:
+                length_factor = 0.6  # Too verbose, lower confidence
+            factors.append(length_factor)
         
-        # Calculate weighted average
-        confidence = sum(factors) / len(factors)
+        # Source attribution factor - but don't require made-up citations
+        source_factor = 1.0 if any(phrase in answer_lower for phrase in [
+            'according to', 'guidelines', 'evidence shows'
+        ]) else 0.8  # Slightly lower but still good if no attribution
+        factors.append(source_factor)
         
-        return round(confidence, 2)
+        # Penalize if answer contains suspicious citations (made-up years)
+        if any(suspicious in answer_lower for suspicious in ['2026', '2027', '2028']):
+            factors.append(0.3)  # Heavy penalty for made-up citations
+        
+        return round(sum(factors) / len(factors), 2)
     
     def _generate_no_evidence_response(self) -> str:
         """Generate response when no evidence is available."""
