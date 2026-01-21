@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import Header from "@/components/Header";
 import ChatMessage from "@/components/ChatMessage";
 import ChatInput from "@/components/ChatInput";
@@ -29,6 +29,10 @@ const Index = () => {
     loadStats,
   } = useDocuments();
 
+  // Ref for auto-scrolling
+  const scrollAreaRef = useRef<HTMLDivElement>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
   // Check backend and load stats on mount
   useEffect(() => {
     const initialize = async () => {
@@ -37,6 +41,13 @@ const Index = () => {
     };
     initialize();
   }, [checkBackend, loadStats]);
+
+  // Auto-scroll to bottom when messages change
+  useEffect(() => {
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [messages, isLoading]);
 
   const handleSend = (content: string) => {
     sendMessage(content);
@@ -82,7 +93,7 @@ const Index = () => {
                   />
                 </div>
               ) : (
-                <ScrollArea className="h-full">
+                <ScrollArea className="h-full" ref={scrollAreaRef}>
                   <div className="max-w-3xl mx-auto px-4 py-6 space-y-4">
                     {messages.map((message) => (
                       <ChatMessage
@@ -113,6 +124,8 @@ const Index = () => {
                         </div>
                       </div>
                     )}
+                    {/* Invisible element to scroll to */}
+                    <div ref={messagesEndRef} />
                   </div>
                 </ScrollArea>
               )}

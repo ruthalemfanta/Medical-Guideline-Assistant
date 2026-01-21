@@ -1,5 +1,4 @@
-import { BookOpen, PanelLeftClose, PanelLeft, Wifi, WifiOff, RefreshCw } from "lucide-react";
-import { useSidebar } from "@/components/ui/sidebar";
+import { BookOpen, Wifi, WifiOff, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useEffect, useState } from "react";
@@ -11,8 +10,6 @@ interface HeaderProps {
 }
 
 const Header = ({ isBackendAvailable, onRefreshBackend }: HeaderProps) => {
-  const { state, toggleSidebar } = useSidebar();
-  const isCollapsed = state === "collapsed";
   const [isChecking, setIsChecking] = useState(false);
 
   const handleRefreshBackend = async () => {
@@ -26,18 +23,6 @@ const Header = ({ isBackendAvailable, onRefreshBackend }: HeaderProps) => {
   return (
     <header className="border-b border-border bg-card">
       <div className="px-4 py-3 flex items-center gap-3">
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={toggleSidebar}
-          className="shrink-0"
-        >
-          {isCollapsed ? (
-            <PanelLeft className="h-5 w-5" />
-          ) : (
-            <PanelLeftClose className="h-5 w-5" />
-          )}
-        </Button>
         <div className="h-9 w-9 rounded-xl bg-primary/10 flex items-center justify-center">
           <BookOpen className="h-4 w-4 text-primary" />
         </div>

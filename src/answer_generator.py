@@ -93,10 +93,47 @@ class MedicalAnswerGenerator:
                 model='gemini-2.5-flash',
                 contents=prompt
             )
-            return response.text.strip()
+            raw_answer = response.text.strip()
+            
+            # Format the answer to clean up markdown symbols
+            formatted_answer = self._format_markdown_to_text(raw_answer)
+            
+            return formatted_answer
             
         except Exception as e:
             return f"I encountered an error while processing your query: {str(e)}"
+    
+    def _format_markdown_to_text(self, text: str) -> str:
+        """Convert markdown formatting to clean text formatting."""
+        
+        # Convert bold text (**text** or __text__)
+        import re
+        
+        # Replace **bold** with BOLD TEXT (uppercase)
+        text = re.sub(r'\*\*(.*?)\*\*', r'\1', text)  # Remove ** but keep content
+        text = re.sub(r'__(.*?)__', r'\1', text)      # Remove __ but keep content
+        
+        # Replace *italic* with regular text (just remove asterisks)
+        text = re.sub(r'\*(.*?)\*', r'\1', text)
+        
+        # Clean up bullet points - convert * to •
+        text = re.sub(r'^\s*\*\s+', '• ', text, flags=re.MULTILINE)
+        
+        # Clean up numbered lists - ensure proper formatting
+        text = re.sub(r'^\s*(\d+)\.\s+', r'\1. ', text, flags=re.MULTILINE)
+        
+        # Clean up headers (### or ##)
+        text = re.sub(r'^#{1,6}\s+', '', text, flags=re.MULTILINE)
+        
+        # Clean up any remaining markdown artifacts
+        text = re.sub(r'`([^`]+)`', r'\1', text)  # Remove code backticks
+        text = re.sub(r'\[([^\]]+)\]\([^\)]+\)', r'\1', text)  # Remove links, keep text
+        
+        # Clean up extra whitespace
+        text = re.sub(r'\n\s*\n\s*\n', '\n\n', text)  # Max 2 consecutive newlines
+        text = re.sub(r'[ \t]+', ' ', text)  # Multiple spaces to single space
+        
+        return text.strip()
     
     def _calculate_confidence(self, answer: str, retrieved_docs: List[RetrievedDocument]) -> float:
         """Calculate confidence score based on answer quality and evidence."""
