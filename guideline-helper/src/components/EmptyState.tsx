@@ -69,23 +69,6 @@ const EmptyState = ({ hasDocuments = false, isBackendAvailable = false, onExampl
         All responses are sourced from official documentation with citations.
       </p>
       
-      <div className="grid gap-3 w-full max-w-md">
-        <ExampleCard
-          icon={<FileText className="h-4 w-4" />}
-          text="What are the WHO guidelines for hypertension management?"
-          onClick={() => handleExampleClick("What are the WHO guidelines for hypertension management?")}
-        />
-        <ExampleCard
-          icon={<Shield className="h-4 w-4" />}
-          text="What vaccinations are recommended for adults?"
-          onClick={() => handleExampleClick("What vaccinations are recommended for adults?")}
-        />
-        <ExampleCard
-          icon={<BookOpen className="h-4 w-4" />}
-          text="What are the screening guidelines for diabetes?"
-          onClick={() => handleExampleClick("What are the screening guidelines for diabetes?")}
-        />
-      </div>
 
       <p className="text-xs text-muted-foreground mt-8 max-w-sm">
         ⚠️ For educational purposes only. Always consult healthcare professionals for medical advice.

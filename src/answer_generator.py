@@ -28,9 +28,7 @@ class MedicalAnswerGenerator:
         
         # Generate answer using Gemini
         answer = self._generate_llm_answer(query_analysis, evidence_context)
-        
-        # Create simple source attribution (no detailed citations)
-        citations = []  # Disabled as requested
+        citations = [] 
         
         # Calculate confidence score
         confidence = self._calculate_confidence(answer, retrieved_docs)
@@ -47,15 +45,12 @@ class MedicalAnswerGenerator:
             
             # Clean content
             content = doc.content.strip()
-            
-            # Skip obvious metadata/headers
             if any(skip in content.lower() for skip in [
                 'prepared for educational purposes only',
                 'page 1 of', 'page 2 of', 'page 3 of'
             ]):
                 continue
             
-            # Use just the filename instead of complex metadata
             source_name = metadata.guideline if metadata.guideline else "Medical Guideline"
             
             evidence_part = f"""
@@ -72,7 +67,7 @@ class MedicalAnswerGenerator:
         """Generate answer using Gemini with proper prompting."""
         
         prompt = f"""
-        You are a medical information assistant. Provide CONCISE, educational answers based ONLY on the evidence provided.
+        You are a medical information assistant. Provide CONCISE, educational answers based ONLY on the evidence provided. Answer in a polite friendly manner.
         
         CRITICAL INSTRUCTIONS:
         1. Keep answers conscise.
@@ -112,11 +107,11 @@ class MedicalAnswerGenerator:
         # Convert bold text (**text** or __text__)
         import re
         
-        # Replace **bold** with BOLD TEXT (uppercase)
-        text = re.sub(r'\*\*(.*?)\*\*', r'\1', text)  # Remove ** but keep content
-        text = re.sub(r'__(.*?)__', r'\1', text)      # Remove __ but keep content
+        # Replace **bold** with BOLD TEXT 
+        text = re.sub(r'\*\*(.*?)\*\*', r'\1', text) 
+        text = re.sub(r'__(.*?)__', r'\1', text)      
         
-        # Replace *italic* with regular text (just remove asterisks)
+        # Replace *italic* with regular text 
         text = re.sub(r'\*(.*?)\*', r'\1', text)
         
         # Clean up bullet points - convert * to •
@@ -129,12 +124,12 @@ class MedicalAnswerGenerator:
         text = re.sub(r'^#{1,6}\s+', '', text, flags=re.MULTILINE)
         
         # Clean up any remaining markdown artifacts
-        text = re.sub(r'`([^`]+)`', r'\1', text)  # Remove code backticks
-        text = re.sub(r'\[([^\]]+)\]\([^\)]+\)', r'\1', text)  # Remove links, keep text
+        text = re.sub(r'`([^`]+)`', r'\1', text) 
+        text = re.sub(r'\[([^\]]+)\]\([^\)]+\)', r'\1', text)  
         
         # Clean up extra whitespace
-        text = re.sub(r'\n\s*\n\s*\n', '\n\n', text)  # Max 2 consecutive newlines
-        text = re.sub(r'[ \t]+', ' ', text)  # Multiple spaces to single space
+        text = re.sub(r'\n\s*\n\s*\n', '\n\n', text) 
+        text = re.sub(r'[ \t]+', ' ', text)  
         
         return text.strip()
     

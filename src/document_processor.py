@@ -40,10 +40,10 @@ class MedicalDocumentProcessor:
         
         documents = []
         
-        print(f"📄 Processing PDF: {file_path}")
+        print(f"Processing PDF: {file_path}")
         
         with pdfplumber.open(file_path) as pdf:
-            print(f"📊 PDF has {len(pdf.pages)} pages")
+            print(f"PDF has {len(pdf.pages)} pages")
             
             full_text = ""
             page_texts = {}
@@ -54,17 +54,17 @@ class MedicalDocumentProcessor:
                 if page_text:
                     page_texts[page_num] = page_text
                     full_text += f"\n[PAGE {page_num}]\n{page_text}"
-                    print(f"✅ Extracted {len(page_text)} chars from page {page_num}")
+                    print(f"Extracted {len(page_text)} chars from page {page_num}")
             
-            print(f"📝 Total extracted text: {len(full_text)} characters")
+            print(f"Total extracted text: {len(full_text)} characters")
             
             # Extract document structure
             sections = self._extract_sections(full_text)
-            print(f"🗂️ Found {len(sections)} sections: {list(sections.keys())}")
+            print(f"Found {len(sections)} sections: {list(sections.keys())}")
             
             # Process each section
             for section_name, section_content in sections.items():
-                print(f"🔍 Processing section '{section_name}' ({len(section_content)} chars)")
+                print(f"Processing section '{section_name}' ({len(section_content)} chars)")
                 
                 section_docs = self._process_section(
                     section_content, 
@@ -73,10 +73,10 @@ class MedicalDocumentProcessor:
                     page_texts
                 )
                 
-                print(f"✅ Created {len(section_docs)} chunks from section '{section_name}'")
+                print(f"Created {len(section_docs)} chunks from section '{section_name}'")
                 documents.extend(section_docs)
         
-        print(f"🎉 Total documents created: {len(documents)}")
+        print(f"Total documents created: {len(documents)}")
         return documents
     
     def _extract_sections(self, text: str) -> Dict[str, str]:
